@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Overlap",
+    "slug": "overlap",
+    "scheme": "overlap",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0C1015",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.trothing.overlap"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0C1015",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "package": "com.trothing.overlap"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Overlap adds the call you picked to your calendar."
+        }
+      ],
+      "expo-sharing",
+      "expo-notifications"
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "3b15b4c3-3221-46ca-abab-832251626cfc"
+      }
+    }
+  }
+}

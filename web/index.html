@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#0c1015" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f2f4f6" media="(prefers-color-scheme: light)">
+    <meta name="robots" content="noindex">
+    <title>Overlap</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="page">
+        <p class="brand">Overlap</p>
+
+        <section class="card" id="slot" hidden>
+            <h1 id="title"></h1>
+            <p class="day" id="day"></p>
+            <p class="time" id="time"></p>
+            <p class="meta" id="meta"></p>
+            <div class="actions">
+                <button class="button primary" id="calendar" type="button"></button>
+                <a class="button secondary" id="app" href="#"></a>
+            </div>
+        </section>
+
+        <section class="card" id="invalid" hidden>
+            <h1 id="invalid-title"></h1>
+            <p class="meta" id="invalid-hint"></p>
+        </section>
+
+        <p class="foot" id="foot"></p>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

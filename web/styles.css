@@ -1,0 +1,185 @@
+@font-face {
+    font-family: 'Plex';
+    src: url('fonts/plex-sans-400.ttf') format('truetype');
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Plex';
+    src: url('fonts/plex-sans-500.ttf') format('truetype');
+    font-weight: 500;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Plex';
+    src: url('fonts/plex-sans-600.ttf') format('truetype');
+    font-weight: 600;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Plex Condensed';
+    src: url('fonts/plex-condensed-600.ttf') format('truetype');
+    font-weight: 600;
+    font-display: swap;
+}
+
+:root {
+    color-scheme: dark light;
+
+    --ground: #0c1015;
+    --surface: #131920;
+    --raised: #1b232c;
+    --text: #e6ebef;
+    --muted: #8794a1;
+    --accent: #5fb39a;
+    --on-accent: #08120e;
+
+    --body: 'Plex', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --numeral: 'Plex Condensed', 'Plex', system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) {
+        --ground: #f2f4f6;
+        --surface: #ffffff;
+        --raised: #e8ecf0;
+        --text: #10161c;
+        --muted: #5b6773;
+        --accent: #1e6b52;
+        --on-accent: #ffffff;
+    }
+}
+
+:root[data-theme='light'] {
+    color-scheme: light;
+    --ground: #f2f4f6;
+    --surface: #ffffff;
+    --raised: #e8ecf0;
+    --text: #10161c;
+    --muted: #5b6773;
+    --accent: #1e6b52;
+    --on-accent: #ffffff;
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    background: var(--ground);
+}
+
+body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--ground);
+    color: var(--text);
+    font: 400 16px/22px var(--body);
+}
+
+.page {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: calc(env(safe-area-inset-top, 0px) + 32px) calc(env(safe-area-inset-right, 0px) + 24px) calc(env(safe-area-inset-bottom, 0px) + 32px) calc(env(safe-area-inset-left, 0px) + 24px);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.brand {
+    font: 600 15px/20px var(--body);
+    color: var(--muted);
+}
+
+.card {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 24px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.card[hidden] {
+    display: none;
+}
+
+h1 {
+    font: 500 15px/20px var(--body);
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.day {
+    font: 400 16px/22px var(--body);
+    color: var(--muted);
+}
+
+.time {
+    font: 600 38px/44px var(--numeral);
+    text-wrap: balance;
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+    margin: 8px 0 4px;
+    overflow-wrap: anywhere;
+}
+
+.meta {
+    font: 500 13px/18px var(--body);
+    color: var(--muted);
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.button {
+    min-height: 52px;
+    padding: 0 16px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 600 16px/22px var(--body);
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    border: 0;
+}
+
+.button.primary {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.button.secondary {
+    min-height: 48px;
+    background: var(--raised);
+    color: var(--text);
+}
+
+.button:hover {
+    opacity: 0.88;
+}
+
+.button:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+}
+
+.foot {
+    font: 500 13px/18px var(--body);
+    color: var(--muted);
+}
