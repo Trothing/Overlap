@@ -50,6 +50,25 @@ export function callParticipants(call: SavedCall, people: Person[]): Person[] {
     return people.filter((person) => person.me || call.personIds.includes(person.id))
 }
 
+export function callsWithPerson(calls: SavedCall[], personId: string): SavedCall[] {
+    return calls.filter((call) => call.personIds.includes(personId))
+}
+
+export function withoutPerson(calls: SavedCall[], personId: string): { kept: SavedCall[]; dropped: SavedCall[] } {
+    const kept: SavedCall[] = []
+    const dropped: SavedCall[] = []
+    for (const call of calls) {
+        if (!call.personIds.includes(personId)) {
+            kept.push(call)
+            continue
+        }
+        const personIds = call.personIds.filter((entry) => entry !== personId)
+        if (personIds.length === 0) dropped.push(call)
+        else kept.push({ ...call, personIds })
+    }
+    return { kept, dropped }
+}
+
 export interface WeeklyTrigger {
     weekday: number
     hour: number

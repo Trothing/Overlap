@@ -1,5 +1,5 @@
 import type { IsoWeekday, Person } from '../types'
-import { callKey, callParticipants, createCall, nextOccurrence, reminderTrigger, type SavedCall } from './calls'
+import { callKey, callParticipants, callsWithPerson, createCall, nextOccurrence, reminderTrigger, withoutPerson, type SavedCall } from './calls'
 
 const WORKWEEK: IsoWeekday[] = [1, 2, 3, 4, 5]
 const person = (id: string, zone: string, me = false): Person => ({ id, name: id, city: id, zone, start: 540, end: 1080, workDays: WORKWEEK, ...(me ? { me: true } : {}) })
@@ -73,5 +73,28 @@ describe('callKey', () => {
     it('is the same for the same weekday, time and length', () => {
         expect(callKey(wednesday16)).toBe(callKey({ weekday: 3, minute: 960, duration: 60 }))
         expect(callKey(wednesday16)).not.toBe(callKey({ weekday: 3, minute: 960, duration: 30 }))
+    })
+})
+
+describe('removing a person from calls', () => {
+    const shared: SavedCall = { ...wednesday16, id: 'c2', personIds: ['max', 'lena'] }
+    const solo: SavedCall = { ...wednesday16, id: 'c3', personIds: ['lena'] }
+    const calls = [wednesday16, shared, solo]
+
+    it('finds the calls a person is in', () => {
+        expect(callsWithPerson(calls, 'max').map((entry) => entry.id)).toEqual(['c1', 'c2'])
+        expect(callsWithPerson(calls, 'nobody')).toEqual([])
+    })
+
+    it('drops them from shared calls and deletes calls left with nobody else', () => {
+        const result = withoutPerson(calls, 'max')
+        expect(result.dropped.map((entry) => entry.id)).toEqual(['c1'])
+        expect(result.kept.map((entry) => [entry.id, entry.personIds])).toEqual([['c2', ['lena']], ['c3', ['lena']]])
+    })
+
+    it('leaves calls untouched when the person is not in them', () => {
+        const result = withoutPerson(calls, 'nobody')
+        expect(result.dropped).toEqual([])
+        expect(result.kept).toEqual(calls)
     })
 })

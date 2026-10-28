@@ -10,9 +10,10 @@ interface ButtonProps {
     onPress: () => void
     variant?: Variant
     flex?: boolean
+    disabled?: boolean
 }
 
-export function Button({ label, onPress, variant = 'primary', flex }: ButtonProps) {
+export function Button({ label, onPress, variant = 'primary', flex, disabled }: ButtonProps) {
     const colors = useColors()
     const styles = useMemo(() => createStyles(colors), [colors])
     const labelStyles = useMemo(() => createLabelStyles(colors), [colors])
@@ -20,10 +21,12 @@ export function Button({ label, onPress, variant = 'primary', flex }: ButtonProp
         <Pressable
             accessibilityRole="button"
             accessibilityLabel={label}
+            accessibilityState={{ disabled: Boolean(disabled) }}
+            disabled={disabled}
             onPress={onPress}
-            style={({ pressed }) => [styles.base, styles[variant], flex ? styles.flex : null, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.base, styles[variant], flex ? styles.flex : null, disabled ? styles.disabled : null, pressed ? styles.pressed : null]}
         >
-            <Text style={[styles.label, labelStyles[variant]]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+            <Text style={[styles.label, labelStyles[variant], disabled ? labelStyles.disabled : null]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
                 {label}
             </Text>
         </Pressable>
@@ -38,6 +41,7 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     destructive: { backgroundColor: 'transparent' },
     flex: { flex: 1 },
     pressed: { opacity: 0.8 },
+    disabled: { backgroundColor: colors.raised },
     label: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22, textAlign: 'center' },
 })
 
@@ -46,4 +50,5 @@ const createLabelStyles = (colors: Palette) => StyleSheet.create({
     secondary: { color: colors.text },
     quiet: { color: colors.muted },
     destructive: { color: colors.danger },
+    disabled: { color: colors.muted },
 })

@@ -56,3 +56,21 @@ describe('draft conversion', () => {
         expect(saved.me).toBe(true)
     })
 })
+
+describe('around the clock draft', () => {
+    it('accepts equal start and end when the person is available all day', () => {
+        const draft = { ...newDraft('x'), name: 'Ana', zone: 'UTC', city: 'UTC', start: 600, end: 600, allDay: true }
+        expect(validateDraft(draft)).toBeNull()
+        expect(draftToPerson(draft).allDay).toBe(true)
+    })
+
+    it('still needs at least one working day', () => {
+        expect(validateDraft({ ...newDraft('x'), name: 'Ana', zone: 'UTC', city: 'UTC', allDay: true, workDays: [] })).toBe('needHours')
+    })
+
+    it('round-trips through a person', () => {
+        const saved = draftToPerson({ ...newDraft('x'), name: 'Ana', zone: 'UTC', city: 'UTC', allDay: true })
+        expect(draftFromPerson(saved).allDay).toBe(true)
+        expect(draftToPerson({ ...newDraft('y'), name: 'Bo', zone: 'UTC', city: 'UTC' }).allDay).toBeUndefined()
+    })
+})

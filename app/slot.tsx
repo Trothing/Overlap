@@ -2,8 +2,10 @@ import * as Clipboard from 'expo-clipboard'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
-import Animated, { FadeIn, FadeInDown, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated'
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler'
+import Animated, { FadeIn, FadeInDown, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { scheduleOnRN } from 'react-native-worklets'
 import { HAS_WEB_LINK, LINK_BASE } from '../src/config'
 import { callKey, createCall } from '../src/domain/calls/calls'
 import { slotText } from '../src/domain/share/slotText'
@@ -14,11 +16,12 @@ import { scheduleReminder } from '../src/features/calls/reminders'
 import { addSlotToCalendar } from '../src/features/slot/calendar'
 import { useFormat } from '../src/i18n/useFormat'
 import { useAppStore } from '../src/store/useAppStore'
+import { useGroupView } from '../src/store/useGroupView'
 import { Button } from '../src/ui/Button'
 import { Glyph } from '../src/ui/Glyph'
 import { SegControl } from '../src/ui/SegControl'
 import { TextField } from '../src/ui/TextField'
-import { type Palette, fonts, radius, spacing, type } from '../src/ui/tokens'
+import { type Palette, radius, spacing, type } from '../src/ui/tokens'
 import { useColors } from '../src/ui/theme'
 
 const NOTICE_MS = 2200
@@ -30,6 +33,9 @@ const SCRIM_MS = 200
 const DAY_MS = 86400000
 const MAX_SHIFT_NOTES = 2
 const MAX_LOOKAHEAD_DAYS = 120
+const DRAG_CLOSE_DISTANCE = 110
+const DRAG_CLOSE_VELOCITY = 900
+const DRAG_RESET_MS = 180
 
 export default function SlotScreen() {
     const colors = useColors()
@@ -37,7 +43,7 @@ export default function SlotScreen() {
     const insets = useSafeAreaInsets()
     const router = useRouter()
     const format = useFormat()
-    const people = useAppStore((state) => state.people)
+    const { people } = useGroupView()
     const calls = useAppStore((state) => state.calls)
     const saveCall = useAppStore((state) => state.saveCall)
     const params = useLocalSearchParams<{ start?: string; duration?: string; title?: string }>()
@@ -71,6 +77,28 @@ export default function SlotScreen() {
         })
         return () => subscription.remove()
     }, [close])
+
+    const dragY = useSharedValue(0)
+    const dragVelocity = useSharedValue(0)
+    const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateY: dragY.value }] }))
+    const drag = usePanGesture({
+        activeOffsetY: [-8, 8],
+        failOffsetX: [-24, 24],
+        onBegin: () => {
+            'worklet'
+            dragVelocity.value = 0
+        },
+        onUpdate: (event) => {
+            'worklet'
+            dragY.value = Math.max(0, event.translationY)
+            dragVelocity.value = event.velocityY
+        },
+        onFinalize: () => {
+            'worklet'
+            if (dragY.value > DRAG_CLOSE_DISTANCE || dragVelocity.value > DRAG_CLOSE_VELOCITY) scheduleOnRN(close)
+            else dragY.value = withTiming(0, { duration: DRAG_RESET_MS })
+        },
+    })
 
     if (!incoming) {
         return (
@@ -114,7 +142,7 @@ export default function SlotScreen() {
         }
         const result = await scheduleReminder(call, me, format.t('startsIn').replace('{n}', String(call.remind)))
         saveCall({ ...call, remind: result.outcome === 'scheduled' ? call.remind : 0, notificationId: result.notificationId })
-        showNotice(result.outcome === 'denied' ? format.t('reminderDenied') : format.t('savedCall'))
+        showNotice(result.outcome === 'denied' ? format.t('reminderDenied') : result.outcome === 'unavailable' ? `${format.t('savedCall')}. ${format.t('reminderUnavailable')}` : format.t('savedCall'))
     }
 
     const copyLink = async () => {
@@ -135,9 +163,14 @@ export default function SlotScreen() {
                 </Animated.View>
             ) : null}
             {visible ? (
+                <Animated.View style={[styles.dragWrap, dragStyle]}>
                 <Animated.View entering={SlideInDown.duration(ENTER_MS)} exiting={SlideOutDown.duration(EXIT_MS)} style={styles.sheet}>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl }]}>
-                <View style={styles.grab} />
+            <GestureDetector gesture={drag}>
+                <View style={styles.handleZone} accessible accessibilityRole="button" accessibilityLabel={format.t('cancel')} onAccessibilityTap={close}>
+                    <View style={styles.grab} />
+                </View>
+            </GestureDetector>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
                 <Text style={styles.time} accessibilityRole="header">
                     {format.time(start, me.zone)} – {format.time(end, me.zone)}
                 </Text>
@@ -152,7 +185,7 @@ export default function SlotScreen() {
                     {people.map((person, index) => {
                         const status = statusAt(person, start + duration * 30000)
                         return (
-                            <View key={person.id} style={[styles.person, index === 0 ? null : styles.personDivider]} accessible accessibilityLabel={`${format.personName(person)}, ${person.city}, ${format.time(start, person.zone)}, ${format.statusLabel(status)}`}>
+                            <View key={person.id} style={[styles.person, index === 0 ? null : styles.personDivider]} accessible accessibilityLabel={`${format.personName(person)}, ${person.city}, ${format.time(start, person.zone)}, ${format.statusText(person, status, start + duration * 30000)}`}>
                                 <Glyph status={status} size={16} />
                                 <Text style={styles.personName} numberOfLines={1}>
                                     {format.personName(person)} <Text style={styles.personCity}>{person.city}</Text>
@@ -195,6 +228,7 @@ export default function SlotScreen() {
                 </Animated.View>
             ) : null}
                 </Animated.View>
+                </Animated.View>
             ) : null}
         </KeyboardAvoidingView>
     )
@@ -203,10 +237,12 @@ export default function SlotScreen() {
 const createStyles = (colors: Palette) => StyleSheet.create({
     root: { flex: 1, justifyContent: 'flex-end' },
     scrim: { flex: 1, backgroundColor: colors.scrim },
-    sheet: { maxHeight: '92%', backgroundColor: colors.ground, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, overflow: 'hidden' },
+    dragWrap: { maxHeight: '92%' },
+    sheet: { flexShrink: 1, backgroundColor: colors.ground, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, overflow: 'hidden' },
     screen: { flex: 1, backgroundColor: colors.ground, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, overflow: 'hidden' },
     content: { paddingHorizontal: spacing.xl, gap: spacing.md },
-    grab: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.raised, marginBottom: spacing.sm },
+    handleZone: { height: 36, alignItems: 'center', justifyContent: 'center' },
+    grab: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.raised },
     time: { ...type.numeralLarge, color: colors.text },
     day: { ...type.body, color: colors.muted, marginBottom: spacing.sm },
     label: { ...type.label, color: colors.muted },

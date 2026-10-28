@@ -5,11 +5,22 @@ import type { Language } from '../../i18n/dictionary'
 const ENDPOINT = 'https://geocoding-api.open-meteo.com/v1'
 const LANGUAGES: Language[] = ['en', 'uk', 'es']
 const PER_LANGUAGE = 8
+const TIMEOUT_MS = 6000
 
 async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
-    const response = await fetch(url, { signal })
-    if (!response.ok) throw new Error(`geocoding ${response.status}`)
-    return response.json()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const forward = () => controller.abort()
+    if (signal?.aborted) controller.abort()
+    signal?.addEventListener('abort', forward)
+    try {
+        const response = await fetch(url, { signal: controller.signal })
+        if (!response.ok) throw new Error(`geocoding ${response.status}`)
+        return await response.json()
+    } finally {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', forward)
+    }
 }
 
 async function searchIn(query: string, language: Language, signal?: AbortSignal): Promise<Place[]> {

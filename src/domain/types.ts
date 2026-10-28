@@ -11,8 +11,10 @@ export interface Person {
     start: number
     end: number
     workDays: IsoWeekday[]
+    allDay?: boolean
     me?: boolean
     sample?: boolean
+    groupIds?: string[]
 }
 
 export interface LocalParts {

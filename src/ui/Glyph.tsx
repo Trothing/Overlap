@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react'
 import { View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
 import type { Status } from '../domain/types'
-import { type Palette, statusGlyph } from './tokens'
+import { statusGlyph } from './tokens'
 import { useColors } from './theme'
 
 interface GlyphProps {

@@ -101,3 +101,17 @@ describe('suggestSlots', () => {
         expect(planFrom(Date.UTC(2026, 9, 27, 10, 7), 0)).toBe(Date.UTC(2026, 9, 27, 10, 0))
     })
 })
+
+describe('around the clock people', () => {
+    it('are always fully comfortable on their days', () => {
+        const always = { ...person('UTC'), allDay: true }
+        expect(comfortAt(always, Date.UTC(2026, 9, 27, 3, 0))).toBe(1)
+        expect(comfortAt(always, Date.UTC(2026, 9, 27, 14, 0))).toBe(1)
+    })
+
+    it('let the other person decide the best time', () => {
+        const slots = suggestSlots([{ ...person('Asia/Tokyo'), allDay: true }, person('America/New_York')], monday, 60)
+        expect(slots[0].tier).toBe(0)
+        expect(slots[0].issues).toEqual([])
+    })
+})

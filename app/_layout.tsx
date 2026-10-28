@@ -22,8 +22,6 @@ function useHydrated(): boolean {
     return hydrated
 }
 
-configureNotifications()
-
 const PREWARM_DELAY_MS = 800
 
 function usePrewarm(ready: boolean): void {
@@ -55,6 +53,9 @@ export default function RootLayout() {
     const hydrated = useHydrated()
     const ready = fontsLoaded && hydrated
     usePrewarm(ready)
+    useEffect(() => {
+        configureNotifications()
+    }, [])
 
     if (!ready) return null
 

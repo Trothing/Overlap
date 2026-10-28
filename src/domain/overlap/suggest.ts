@@ -30,6 +30,7 @@ export function planFrom(nowMs: number, dayStartMs: number): number {
 export function comfortAt(person: Person, ms: number): number {
     const status = statusAt(person, ms)
     if (status !== 'core') return COMFORT[status]
+    if (person.allDay) return COMFORT.core
     const { minutes } = localClock(ms, person.zone)
     const length = (person.end - person.start + MINUTES_PER_DAY) % MINUTES_PER_DAY
     const offset = (minutes - person.start + MINUTES_PER_DAY) % MINUTES_PER_DAY

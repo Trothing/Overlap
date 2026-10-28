@@ -2,6 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { ActivityIndicator, type LayoutChangeEvent, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { callsWithPerson, withoutPerson } from '../src/domain/calls/calls'
+import { cancelReminder } from '../src/features/calls/reminders'
+import { toggleId } from '../src/domain/people/groups'
 import { draftFromPerson, draftToPerson, MAX_NAME_LENGTH, newDraft, toggleDay, validateDraft, type DraftError, type PersonDraft } from '../src/domain/people/draft'
 import type { IsoWeekday } from '../src/domain/types'
 import type { Place } from '../src/domain/geo/places'
@@ -11,6 +14,8 @@ import { useFormat } from '../src/i18n/useFormat'
 import { useAppStore } from '../src/store/useAppStore'
 import { Button } from '../src/ui/Button'
 import { Icon } from '../src/ui/Icon'
+import { Toggle } from '../src/ui/Toggle'
+import { SegControl } from '../src/ui/SegControl'
 import { TextField } from '../src/ui/TextField'
 import { TimeField } from '../src/ui/TimeField'
 import { type Palette, radius, spacing, type } from '../src/ui/tokens'
@@ -20,6 +25,13 @@ const REMOVE_CONFIRM_MS = 5000
 const DAY_COLUMNS = 4
 const DAY_GAP = spacing.sm
 const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7]
+const WEEKDAYS: IsoWeekday[] = [1, 2, 3, 4, 5]
+
+function dayPreset(days: IsoWeekday[]): string {
+    if (days.length === 7) return 'every'
+    if (days.length === 5 && WEEKDAYS.every((day) => days.includes(day))) return 'weekdays'
+    return ''
+}
 
 export default function PersonScreen() {
     const colors = useColors()
@@ -29,12 +41,15 @@ export default function PersonScreen() {
     const format = useFormat()
     const { id } = useLocalSearchParams<{ id?: string }>()
     const people = useAppStore((state) => state.people)
+    const calls = useAppStore((state) => state.calls)
+    const groups = useAppStore((state) => state.groups)
+    const activeGroupId = useAppStore((state) => state.activeGroupId)
     const savePerson = useAppStore((state) => state.savePerson)
     const removePerson = useAppStore((state) => state.removePerson)
 
     const [draft, setDraft] = useState<PersonDraft>(() => {
         const existing = id ? people.find((person) => person.id === id) : undefined
-        return existing ? draftFromPerson(existing) : newDraft(`p${Date.now()}`)
+        return existing ? draftFromPerson(existing) : newDraft(`p${Date.now()}`, activeGroupId && groups.some((group) => group.id === activeGroupId) ? [activeGroupId] : [])
     })
     const [cityText, setCityText] = useState(draft.city)
     const [error, setError] = useState<DraftError | null>(null)
@@ -85,11 +100,15 @@ export default function PersonScreen() {
         router.back()
     }
 
-    const remove = () => {
+    const affected = callsWithPerson(calls, draft.id)
+
+    const remove = async () => {
         if (!removeArmed) {
             setRemoveArmed(true)
             return
         }
+        const { dropped } = withoutPerson(calls, draft.id)
+        await Promise.all(dropped.map((call) => cancelReminder(call.notificationId)))
         removePerson(draft.id)
         router.back()
     }
@@ -142,13 +161,28 @@ export default function PersonScreen() {
                     </View>
                 )}
 
-                <View style={styles.pair}>
-                    <TimeField label={format.t('workStarts')} value={draft.start} format={format} onChange={(start) => patch({ start })} />
-                    <TimeField label={format.t('workEnds')} value={draft.end} format={format} onChange={(end) => patch({ end })} />
+                <View style={styles.allDayRow}>
+                    <View style={styles.allDayText}>
+                        <Text style={styles.allDayTitle}>{format.t('allDay')}</Text>
+                        <Text style={styles.allDayHint}>{format.t('allDayHint')}</Text>
+                    </View>
+                    <Toggle label={format.t('allDay')} value={draft.allDay} onChange={(allDay) => patch({ allDay })} />
                 </View>
+
+                {draft.allDay ? null : (
+                    <View style={styles.pair}>
+                        <TimeField label={format.t('workStarts')} value={draft.start} format={format} onChange={(start) => patch({ start })} />
+                        <TimeField label={format.t('workEnds')} value={draft.end} format={format} onChange={(end) => patch({ end })} />
+                    </View>
+                )}
 
                 <View style={styles.daysBlock}>
                     <Text style={styles.label}>{format.t('workDays')}</Text>
+                    <SegControl
+                        options={[['weekdays', format.t('weekdaysOnly')], ['every', format.t('everyDay')]] as const}
+                        value={dayPreset(draft.workDays)}
+                        onChange={(preset) => patch({ workDays: preset === 'every' ? [...DAYS] : [...WEEKDAYS] })}
+                    />
                     <View style={styles.days} onLayout={(event: LayoutChangeEvent) => setDaysWidth(event.nativeEvent.layout.width)}>
                         {DAYS.map((day) => {
                             const selected = draft.workDays.includes(day)
@@ -168,6 +202,30 @@ export default function PersonScreen() {
                     </View>
                 </View>
 
+                {groups.length > 0 && !draft.me ? (
+                    <View style={styles.daysBlock}>
+                        <Text style={styles.label}>{format.t('groupLabel')}</Text>
+                        <View style={styles.groupChips}>
+                            {groups.map((group) => {
+                                const selected = draft.groupIds.includes(group.id)
+                                return (
+                                    <Pressable
+                                        key={group.id}
+                                        accessibilityRole="checkbox"
+                                        accessibilityState={{ checked: selected }}
+                                        onPress={() => patch({ groupIds: toggleId(draft.groupIds, group.id) })}
+                                        style={[styles.groupChip, selected ? styles.daySelected : null]}
+                                    >
+                                        <Text style={[styles.dayLabel, selected ? styles.dayLabelSelected : null]} numberOfLines={1}>
+                                            {group.name}
+                                        </Text>
+                                    </Pressable>
+                                )
+                            })}
+                        </View>
+                    </View>
+                ) : null}
+
                 <View style={styles.actions}>
                     {error ? (
                         <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -175,6 +233,7 @@ export default function PersonScreen() {
                         </Text>
                     ) : null}
                     <Button label={format.t('save')} onPress={save} />
+                    {draft.isNew || draft.me || affected.length === 0 ? null : <Text style={styles.callsNote}>{format.t('personInCalls').replace('{n}', String(affected.length))}</Text>}
                     {draft.isNew || draft.me ? null : <Button label={removeArmed ? format.t('tapAgain') : format.t('remove')} variant="destructive" onPress={remove} />}
                 </View>
             </ScrollView>
@@ -193,9 +252,16 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     result: { minHeight: spacing.target, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, justifyContent: 'center', borderTopWidth: 1, borderTopColor: colors.line },
     searchState: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     stateText: { ...type.label, color: colors.muted, flex: 1 },
+    groupChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    groupChip: { minHeight: spacing.target, maxWidth: '100%', paddingHorizontal: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+    callsNote: { ...type.label, color: colors.muted },
     resultFirst: { borderTopWidth: 0 },
     resultCity: { ...type.heading, color: colors.text },
     resultZone: { ...type.caption, color: colors.muted },
+    allDayRow: { minHeight: spacing.target, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+    allDayText: { flex: 1, minWidth: 0 },
+    allDayTitle: { ...type.heading, color: colors.text },
+    allDayHint: { ...type.label, color: colors.muted },
     pair: { flexDirection: 'row', gap: spacing.md },
     daysBlock: { gap: spacing.sm },
     label: { ...type.label, color: colors.muted },

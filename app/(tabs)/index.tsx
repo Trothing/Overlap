@@ -14,13 +14,16 @@ import { LAST_CURSOR, useCursorStore } from '../../src/features/timeline/cursorS
 import { TimelinePanel } from '../../src/features/timeline/TimelinePanel'
 import { useFormat, type Format } from '../../src/i18n/useFormat'
 import { useAppStore } from '../../src/store/useAppStore'
+import { useGroupView } from '../../src/store/useGroupView'
 import { Button } from '../../src/ui/Button'
 import { Glyph } from '../../src/ui/Glyph'
+import { GroupBar } from '../../src/ui/GroupBar'
 import { Icon } from '../../src/ui/Icon'
 import { type Palette, radius, spacing, type } from '../../src/ui/tokens'
 import { useColors } from '../../src/ui/theme'
 
 const MAX_DAY_OFFSET = 30
+const MIN_DAY_OFFSET = -7
 const ROW_FADE_MS = 180
 const ROW_STAGGER_MS = 40
 const NOTICE_HORIZON_DAYS = 14
@@ -31,8 +34,27 @@ function nowCursor(zone: string): number {
     return Math.min(LAST_CURSOR, Math.round((p.hour * 60 + p.minute) / STEP_MINUTES) * STEP_MINUTES)
 }
 
+function verdictText(people: Person[], ms: number, format: Format): string {
+    const groups = new Map<string, string[]>()
+    for (const person of people) {
+        const status = statusAt(person, ms)
+        if (status === 'core') continue
+        const label = format.statusText(person, status, ms)
+        const names = groups.get(label)
+        if (names) names.push(format.personName(person))
+        else groups.set(label, [format.personName(person)])
+    }
+    if (groups.size === 0) return format.t('everyoneWorking')
+    return [...groups].map(([label, names]) => `${names.join(', ')}: ${label}`).join(' · ')
+}
+
+function isPast(startMs: number): boolean {
+    return startMs + STEP_MINUTES * 60000 <= Date.now()
+}
+
 function reasonOf(slot: SlotSuggestion, format: Format): string {
-    const text = slot.issues.length === 0 ? format.t('everyoneWorking') : slot.issues.map((entry) => `${format.personName(entry.person)}: ${format.statusLabel(entry.status)}`).join(' · ')
+    const middle = slot.start + (slot.end - slot.start) / 2
+    const text = slot.issues.length === 0 ? format.t('everyoneWorking') : slot.issues.map((entry) => `${format.personName(entry.person)}: ${format.statusText(entry.person, entry.status, middle)}`).join(' · ')
     return slot.tier >= 2 ? `${format.t('compromise')} — ${text}` : text
 }
 
@@ -57,41 +79,50 @@ const Hero = memo(function Hero({ people, dayStartMs, format, haptics }: HeroPro
         lastWorst.current = worst
     }, [worst, haptics])
 
-    const notWorking = people
-        .map((person) => ({ person, status: statusAt(person, ms) }))
-        .filter((entry) => entry.status !== 'core')
-        .map((entry) => `${format.personName(entry.person)}: ${format.statusLabel(entry.status)}`)
-    const verdict = notWorking.length === 0 ? format.t('everyoneWorking') : notWorking.join(' · ')
+    const verdict = verdictText(people, ms, format)
 
     return (
-        <View style={styles.hero}>
-            <View style={styles.heroTime}>
+        <View style={styles.heroBlock}>
+            <View style={styles.hero}>
                 <Text style={styles.time} maxFontSizeMultiplier={1.2} accessibilityLabel={`${format.t('summary')} ${format.time(ms, me.zone)}`}>
                     {format.time(ms, me.zone)}
                 </Text>
-                <View style={styles.verdictRow}>
-                    <View style={styles.verdictGlyph}>
-                        <Glyph status={worst} size={14} />
-                    </View>
-                    <Text style={styles.verdict} numberOfLines={2}>
-                        {verdict}
-                    </Text>
+                <View style={styles.steps}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`−${STEP_MINUTES} ${format.t('minutes')}`} onPress={() => useCursorStore.getState().stepBy(-STEP_MINUTES)} style={styles.step}>
+                        <Text style={styles.stepLabel} maxFontSizeMultiplier={1.2}>
+                            −{STEP_MINUTES}
+                        </Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`+${STEP_MINUTES} ${format.t('minutes')}`} onPress={() => useCursorStore.getState().stepBy(STEP_MINUTES)} style={styles.step}>
+                        <Text style={styles.stepLabel} maxFontSizeMultiplier={1.2}>
+                            +{STEP_MINUTES}
+                        </Text>
+                    </Pressable>
                 </View>
             </View>
-            <View style={styles.steps}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`−${STEP_MINUTES} ${format.t('minutes')}`} onPress={() => useCursorStore.getState().stepBy(-STEP_MINUTES)} style={styles.step}>
-                    <Text style={styles.stepLabel} maxFontSizeMultiplier={1.2}>
-                        −{STEP_MINUTES}
-                    </Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel={`+${STEP_MINUTES} ${format.t('minutes')}`} onPress={() => useCursorStore.getState().stepBy(STEP_MINUTES)} style={styles.step}>
-                    <Text style={styles.stepLabel} maxFontSizeMultiplier={1.2}>
-                        +{STEP_MINUTES}
-                    </Text>
-                </Pressable>
+            <View style={styles.verdictRow}>
+                <View style={styles.verdictGlyph}>
+                    <Glyph status={worst} size={14} />
+                </View>
+                <Text style={styles.verdict} numberOfLines={2} maxFontSizeMultiplier={1.15}>
+                    {verdict}
+                </Text>
             </View>
         </View>
     )
+})
+
+interface SlotActionProps {
+    dayStartMs: number
+    format: Format
+    onOpen: (start: number) => void
+}
+
+const SlotAction = memo(function SlotAction({ dayStartMs, format, onOpen }: SlotActionProps) {
+    const minute = useCursorStore((state) => state.minute)
+    const start = dayStartMs + minute * 60000
+    const past = isPast(start)
+    return <Button label={past ? format.t('slotPast') : format.t('slot')} disabled={past} onPress={() => (isPast(start) ? undefined : onOpen(start))} />
 })
 
 interface BestTimesProps {
@@ -137,7 +168,8 @@ export default function TimelineScreen() {
     const insets = useSafeAreaInsets()
     const router = useRouter()
     const format = useFormat()
-    const people = useAppStore((state) => state.people)
+    const { groups, activeGroupId, people } = useGroupView()
+    const setActiveGroup = useAppStore((state) => state.setActiveGroup)
     const settings = useAppStore((state) => state.settings)
     const me = people[0]
     const minWindow = settings.minWindow
@@ -154,7 +186,7 @@ export default function TimelineScreen() {
     const slots = useMemo(() => suggestSlots(people, planFrom(Date.now(), 0), minWindow), [people, minWindow])
     const shifts = useMemo(() => findClockShifts(people, Date.now(), NOTICE_HORIZON_DAYS), [people])
 
-    const shiftDay = (delta: number) => startTransition(() => setDayOffset((value) => Math.min(Math.max(value + delta, 0), MAX_DAY_OFFSET)))
+    const shiftDay = (delta: number) => startTransition(() => setDayOffset((value) => Math.min(Math.max(value + delta, MIN_DAY_OFFSET), MAX_DAY_OFFSET)))
 
     const openSlot = useCallback((start: number) => router.push({ pathname: '/slot', params: { start: String(start), duration: String(minWindow) } }), [router, minWindow])
 
@@ -177,6 +209,8 @@ export default function TimelineScreen() {
 
     return (
         <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}>
+            <GroupBar groups={groups} activeId={activeGroupId} allLabel={format.t('allPeople')} onSelect={setActiveGroup} />
+
             <View style={styles.dayRow}>
                 <Pressable accessibilityRole="button" accessibilityLabel={format.t('previousDay')} onPress={() => shiftDay(-1)} style={styles.dayButton}>
                     <Icon name="left" color={colors.muted} size={20} />
@@ -194,7 +228,7 @@ export default function TimelineScreen() {
             <TimelinePanel people={people} dayStartMs={dayStartMs} format={format} />
 
             <View style={styles.action}>
-                <Button label={format.t('slot')} onPress={() => openSlot(dayStartMs + useCursorStore.getState().minute * 60000)} />
+                <SlotAction dayStartMs={dayStartMs} format={format} onOpen={openSlot} />
             </View>
 
             <Text style={styles.sectionTitle} accessibilityRole="header">
@@ -224,13 +258,13 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     dayButton: { width: spacing.target, height: spacing.target, alignItems: 'center', justifyContent: 'center' },
     day: { ...type.heading, color: colors.muted },
-    hero: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.sm, marginBottom: spacing.xl },
-    heroTime: { flex: 1, minWidth: 0 },
+    heroBlock: { marginTop: spacing.sm, marginBottom: spacing.xl },
+    hero: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
     time: { ...type.display, color: colors.text },
-    verdictRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.xs, minHeight: 44 },
-    verdictGlyph: { height: 22, justifyContent: 'center' },
-    verdict: { ...type.body, color: colors.text, flex: 1 },
-    steps: { flexDirection: 'row', gap: spacing.sm, marginTop: 10 },
+    verdictRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.xs, height: 40 },
+    verdictGlyph: { height: 20, justifyContent: 'center' },
+    verdict: { ...type.label, fontSize: 14, lineHeight: 20, color: colors.text, flex: 1 },
+    steps: { flexDirection: 'row', gap: spacing.sm },
     step: { width: spacing.target, height: spacing.target, borderRadius: radius.pill, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
     stepLabel: { ...type.numeralSmall, color: colors.text },
     action: { marginTop: spacing.lg },

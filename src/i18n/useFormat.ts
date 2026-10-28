@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { ClockShift } from '../domain/time/dst'
 import type { Person, Status } from '../domain/types'
+import { shoulderSide } from '../domain/time/status'
 import { localParts } from '../domain/time/localTime'
 import { useAppStore } from '../store/useAppStore'
 import { dictionaries, type TranslationKey } from './dictionary'
@@ -33,6 +34,7 @@ export function useFormat() {
         }
 
         const statusLabel = (status: Status) => t(STATUS_KEYS[status])
+        const statusText = (person: Person, status: Status, ms: number) => (status === 'shoulder' ? t(shoulderSide(person, ms) === 'before' ? 'statusBefore' : 'statusAfter') : t(STATUS_KEYS[status]))
         const personName = (person: Person) => (person.me ? t('you') : person.name)
         const moreDays = (count: number) => t('moreDays').replace('{n}', String(count))
 
@@ -51,7 +53,7 @@ export function useFormat() {
                 .replace('{shift}', durationText(Math.abs(entry.shift)))
                 .replace('{name}', personName(entry.person))
 
-        return { lang, hour12, t, time, day, dayLabel, statusLabel, personName, moreDays, durationText, shiftText, weekdays: dictionary.weekdaysShort }
+        return { lang, hour12, t, time, day, dayLabel, statusLabel, statusText, personName, moreDays, durationText, shiftText, weekdays: dictionary.weekdaysShort }
     }, [lang, hour12])
 }
 

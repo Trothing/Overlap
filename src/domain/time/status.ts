@@ -7,6 +7,7 @@ const MINUTES_PER_DAY = 1440
 
 export function statusAt(person: Person, ms: number): Status {
     const { minutes, isoWeekday } = localClock(ms, person.zone)
+    if (person.allDay) return person.workDays.includes(isoWeekday) ? 'core' : 'off'
     const overnight = person.start > person.end
     const cycleDay = (overnight && minutes < person.start ? ((isoWeekday + 5) % 7) + 1 : isoWeekday) as IsoWeekday
     if (!person.workDays.includes(cycleDay)) return 'off'
@@ -16,6 +17,14 @@ export function statusAt(person: Person, ms: number): Status {
     if (offset >= MINUTES_PER_DAY - 90 || (offset >= length && offset < length + 150)) return 'shoulder'
     if (offset >= MINUTES_PER_DAY - 180 || (offset >= length + 150 && offset < length + 330)) return 'late'
     return 'sleep'
+}
+
+export type ShoulderSide = 'before' | 'after'
+
+export function shoulderSide(person: Person, ms: number): ShoulderSide {
+    const { minutes } = localClock(ms, person.zone)
+    const offset = (minutes - person.start + MINUTES_PER_DAY) % MINUTES_PER_DAY
+    return offset >= MINUTES_PER_DAY - 90 ? 'before' : 'after'
 }
 
 export function worstStatus(people: Person[], ms: number): Status {

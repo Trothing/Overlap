@@ -18,7 +18,7 @@ const AXIS_HOURS = [0, 3, 6, 9, 12, 15, 18, 21]
 const TICKS = Array.from({ length: 25 }, (_, index) => index)
 const LABEL_WIDTH = 28
 const SETTLE_MS = 110
-const GLIDE_MS = 70
+const SNAP_MS = 90
 const MAX_FONT_SCALE = 1.3
 const BAND_HEIGHT = 22
 const ROW_GAP = 14
@@ -129,10 +129,18 @@ export function TimelinePanel({ people, dayStartMs, format }: TimelinePanelProps
     const cursorX = useSharedValue(0)
     const dragging = useSharedValue(false)
     const lastMinute = useSharedValue(-1)
+    const latestMinute = useSharedValue(-1)
+    const pending = useSharedValue(false)
     const placed = useRef(false)
+
+    const flush = useCallback(() => {
+        pending.value = false
+        if (latestMinute.value >= 0) setMinute(latestMinute.value)
+    }, [pending, latestMinute, setMinute])
 
     useEffect(() => {
         if (plotWidth <= 0 || dragging.value) return
+        if (placed.current && lastMinute.value === minute) return
         const target = (minute / MINUTES_PER_DAY) * plotWidth
         lastMinute.value = minute
         if (placed.current) cursorX.value = withTiming(target, { duration: SETTLE_MS, easing: Easing.out(Easing.cubic) })
@@ -152,27 +160,42 @@ export function TimelinePanel({ people, dayStartMs, format }: TimelinePanelProps
             dragging.value = true
             const w = width.value
             if (w <= 0) return
-            const target = Math.min(Math.round((Math.min(Math.max(event.x / w, 0), 1) * MINUTES_PER_DAY) / STEP_MINUTES) * STEP_MINUTES, LAST_CURSOR)
-            cursorX.value = withTiming((target / MINUTES_PER_DAY) * w, { duration: GLIDE_MS })
-            if (target !== lastMinute.value) {
-                lastMinute.value = target
-                scheduleOnRN(setMinute, target)
+            const x = Math.min(Math.max(event.x, 0), w)
+            cursorX.value = x
+            const minute = Math.min(Math.round(((x / w) * MINUTES_PER_DAY) / STEP_MINUTES) * STEP_MINUTES, LAST_CURSOR)
+            if (minute !== lastMinute.value) {
+                lastMinute.value = minute
+                latestMinute.value = minute
+                if (!pending.value) {
+                    pending.value = true
+                    scheduleOnRN(flush)
+                }
             }
         },
         onUpdate: (event) => {
             'worklet'
             const w = width.value
             if (w <= 0) return
-            const target = Math.min(Math.round((Math.min(Math.max(event.x / w, 0), 1) * MINUTES_PER_DAY) / STEP_MINUTES) * STEP_MINUTES, LAST_CURSOR)
-            cursorX.value = withTiming((target / MINUTES_PER_DAY) * w, { duration: GLIDE_MS })
-            if (target !== lastMinute.value) {
-                lastMinute.value = target
-                scheduleOnRN(setMinute, target)
+            const x = Math.min(Math.max(event.x, 0), w)
+            cursorX.value = x
+            const minute = Math.min(Math.round(((x / w) * MINUTES_PER_DAY) / STEP_MINUTES) * STEP_MINUTES, LAST_CURSOR)
+            if (minute !== lastMinute.value) {
+                lastMinute.value = minute
+                latestMinute.value = minute
+                if (!pending.value) {
+                    pending.value = true
+                    scheduleOnRN(flush)
+                }
             }
         },
         onFinalize: () => {
             'worklet'
             dragging.value = false
+            const w = width.value
+            if (w > 0 && lastMinute.value >= 0) {
+                cursorX.value = withTiming((lastMinute.value / MINUTES_PER_DAY) * w, { duration: SNAP_MS })
+                scheduleOnRN(setMinute, lastMinute.value)
+            }
         },
     })
 
@@ -188,7 +211,7 @@ export function TimelinePanel({ people, dayStartMs, format }: TimelinePanelProps
         useCursorStore.getState().stepBy(event.nativeEvent.actionName === 'increment' ? STEP_MINUTES : -STEP_MINUTES)
     }, [])
 
-    const spoken = `${format.t('summary')} ${format.time(ms, me.zone)}. ${people.map((person) => `${format.personName(person)}: ${format.statusLabel(statusAt(person, ms))}`).join('. ')}`
+    const spoken = `${format.t('summary')} ${format.time(ms, me.zone)}. ${people.map((person) => `${format.personName(person)}: ${format.statusText(person, statusAt(person, ms), ms)}`).join('. ')}`
 
     return (
         <View style={styles.panel}>

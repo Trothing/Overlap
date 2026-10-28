@@ -1,5 +1,5 @@
 import type { IsoWeekday, Person } from '../types'
-import { statusAt, worstStatus } from './status'
+import { shoulderSide, statusAt, worstStatus } from './status'
 
 const WORKWEEK: IsoWeekday[] = [1, 2, 3, 4, 5]
 
@@ -58,5 +58,43 @@ describe('worstStatus', () => {
     it('is core when everyone is working', () => {
         const people = [person({ zone: 'UTC' }), person({ zone: 'Europe/Berlin' })]
         expect(worstStatus(people, at('2026-10-27T10:00:00Z'))).toBe('core')
+    })
+})
+
+describe('around the clock', () => {
+    const always = person({ allDay: true })
+
+    it('is working at every hour of a working day', () => {
+        for (const hour of [0, 3, 7, 12, 19, 23]) expect(statusAt(always, at(`2026-10-27T${String(hour).padStart(2, '0')}:00:00Z`))).toBe('core')
+    })
+
+    it('is off on days that are not selected', () => {
+        expect(statusAt(always, at('2026-10-24T12:00:00Z'))).toBe('off')
+        expect(statusAt(person({ allDay: true, workDays: [1, 2, 3, 4, 5, 6, 7] }), at('2026-10-24T03:00:00Z'))).toBe('core')
+    })
+
+    it('does not make a shared slot worse for the other people', () => {
+        expect(worstStatus([always, person({ zone: 'UTC' })], at('2026-10-27T10:00:00Z'))).toBe('core')
+        expect(worstStatus([always, person({ zone: 'UTC' })], at('2026-10-27T01:00:00Z'))).toBe('sleep')
+    })
+})
+
+describe('shoulderSide', () => {
+    const day = person({})
+
+    it('tells the hours before work from the hours after work', () => {
+        expect(shoulderSide(day, at('2026-10-27T07:30:00Z'))).toBe('before')
+        expect(shoulderSide(day, at('2026-10-27T19:00:00Z'))).toBe('after')
+    })
+
+    it('works for a shift that crosses midnight', () => {
+        const night = person({ start: 1320, end: 360 })
+        expect(shoulderSide(night, at('2026-10-27T20:45:00Z'))).toBe('before')
+        expect(shoulderSide(night, at('2026-10-27T07:30:00Z'))).toBe('after')
+    })
+
+    it('agrees with the shoulder status', () => {
+        expect(statusAt(day, at('2026-10-27T07:30:00Z'))).toBe('shoulder')
+        expect(statusAt(day, at('2026-10-27T19:00:00Z'))).toBe('shoulder')
     })
 })

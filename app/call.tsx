@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { callParticipants, nextOccurrence, REMIND_OPTIONS, type SavedCall } from '../src/domain/calls/calls'
 import { MAX_TITLE_LENGTH } from '../src/domain/share/slotLink'
+import type { IsoWeekday } from '../src/domain/types'
 import { cancelReminder, scheduleReminder } from '../src/features/calls/reminders'
 import { useFormat } from '../src/i18n/useFormat'
 import { useAppStore } from '../src/store/useAppStore'
@@ -11,11 +12,14 @@ import { Button } from '../src/ui/Button'
 import { Icon } from '../src/ui/Icon'
 import { SegControl } from '../src/ui/SegControl'
 import { TextField } from '../src/ui/TextField'
+import { TimeField } from '../src/ui/TimeField'
 import { Toggle } from '../src/ui/Toggle'
 import { type Palette, radius, spacing, type } from '../src/ui/tokens'
 import { useColors } from '../src/ui/theme'
 
 const REMOVE_CONFIRM_MS = 5000
+const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7]
+const DURATIONS = [30, 45, 60, 90]
 
 export default function CallScreen() {
     const colors = useColors()
@@ -34,6 +38,7 @@ export default function CallScreen() {
     const [draft, setDraft] = useState<SavedCall | undefined>(original)
     const [removeArmed, setRemoveArmed] = useState(false)
     const [note, setNote] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         if (!removeArmed) return
@@ -54,9 +59,18 @@ export default function CallScreen() {
     const others = people.filter((person) => !person.me)
     const unit = format.t('minutes')
 
-    const toggle = (personId: string, on: boolean) => setDraft({ ...draft, personIds: on ? [...draft.personIds, personId] : draft.personIds.filter((entry) => entry !== personId) })
+    const change = (patch: Partial<SavedCall>) => {
+        setError(null)
+        setDraft({ ...draft, ...patch })
+    }
+
+    const toggle = (personId: string, on: boolean) => change({ personIds: on ? [...draft.personIds, personId] : draft.personIds.filter((entry) => entry !== personId) })
 
     const save = async () => {
+        if (callParticipants(draft, people).length < 2) {
+            setError(format.t('needParticipant'))
+            return
+        }
         await cancelReminder(original.notificationId)
         const title = draft.title.trim() || format.t('defaultTitle')
         let saved: SavedCall = { ...draft, title, notificationId: undefined }
@@ -100,7 +114,38 @@ export default function CallScreen() {
 
                 <Text style={styles.schedule}>{schedule}</Text>
 
-                <TextField label={format.t('callTitle')} value={draft.title} maxLength={MAX_TITLE_LENGTH} onChangeText={(title) => setDraft({ ...draft, title })} />
+                <TextField label={format.t('callTitle')} value={draft.title} maxLength={MAX_TITLE_LENGTH} onChangeText={(title) => change({ title })} />
+
+                <View style={styles.block}>
+                    <Text style={styles.label}>{format.t('callDay')}</Text>
+                    <View style={styles.days}>
+                        {DAYS.map((day) => {
+                            const selected = draft.weekday === day
+                            return (
+                                <Pressable
+                                    key={day}
+                                    accessibilityRole="radio"
+                                    accessibilityLabel={format.weekdays[day - 1]}
+                                    accessibilityState={{ checked: selected }}
+                                    onPress={() => change({ weekday: day })}
+                                    style={[styles.day, selected ? styles.daySelected : null]}
+                                >
+                                    <Text style={[styles.dayLabel, selected ? styles.dayLabelSelected : null]} maxFontSizeMultiplier={1.2}>
+                                        {format.weekdays[day - 1]}
+                                    </Text>
+                                </Pressable>
+                            )
+                        })}
+                    </View>
+                </View>
+
+                <View style={styles.pair}>
+                    <TimeField label={format.t('callStart')} value={draft.minute} format={format} onChange={(minute) => change({ minute })} />
+                    <View style={styles.length}>
+                        <Text style={styles.label}>{format.t('duration')}</Text>
+                        <SegControl options={DURATIONS.map((value) => [value, `${value}`] as const)} value={draft.duration} onChange={(duration) => change({ duration })} />
+                    </View>
+                </View>
 
                 <View style={styles.block}>
                     <Text style={styles.label}>{format.t('participants')}</Text>
@@ -126,13 +171,13 @@ export default function CallScreen() {
                     <SegControl
                         options={REMIND_OPTIONS.map((value) => [value, value === 0 ? format.t('remindOff') : `${value} ${unit}`] as const)}
                         value={draft.remind}
-                        onChange={(remind) => setDraft({ ...draft, remind })}
+                        onChange={(remind) => change({ remind })}
                     />
                 </View>
 
-                {note ? (
+                {note || error ? (
                     <Text style={styles.note} accessibilityLiveRegion="polite">
-                        {note}
+                        {error ?? note}
                     </Text>
                 ) : null}
 
@@ -153,6 +198,13 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     title: { ...type.title, color: colors.text, flex: 1 },
     schedule: { ...type.body, color: colors.muted, marginTop: -spacing.md },
     block: { gap: spacing.sm },
+    days: { flexDirection: 'row', gap: spacing.xs },
+    day: { flex: 1, minHeight: spacing.target, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+    daySelected: { backgroundColor: colors.accent },
+    dayLabel: { ...type.label, color: colors.muted },
+    dayLabelSelected: { color: colors.onAccent },
+    pair: { flexDirection: 'row', gap: spacing.md },
+    length: { flex: 1.4, gap: spacing.sm },
     label: { ...type.label, color: colors.muted },
     list: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.lg },
     empty: { ...type.body, color: colors.muted, paddingVertical: spacing.md },

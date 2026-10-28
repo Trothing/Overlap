@@ -3,9 +3,12 @@ import { useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { callParticipants, nextOccurrence } from '../../src/domain/calls/calls'
+import { callsInGroup } from '../../src/domain/people/groups'
 import { findClockShifts } from '../../src/domain/time/dst'
 import { useFormat } from '../../src/i18n/useFormat'
 import { useAppStore } from '../../src/store/useAppStore'
+import { useGroupView } from '../../src/store/useGroupView'
+import { GroupBar } from '../../src/ui/GroupBar'
 import { type Palette, radius, spacing, type } from '../../src/ui/tokens'
 import { useColors } from '../../src/ui/theme'
 
@@ -17,8 +20,10 @@ export default function CallsScreen() {
     const insets = useSafeAreaInsets()
     const router = useRouter()
     const format = useFormat()
-    const people = useAppStore((state) => state.people)
-    const calls = useAppStore((state) => state.calls)
+    const { groups, activeGroupId, everyone: people } = useGroupView()
+    const setActiveGroup = useAppStore((state) => state.setActiveGroup)
+    const allCalls = useAppStore((state) => state.calls)
+    const calls = useMemo(() => callsInGroup(allCalls, people, activeGroupId), [allCalls, people, activeGroupId])
     const me = people[0]
     const now = Date.now()
 
@@ -27,6 +32,8 @@ export default function CallsScreen() {
             <Text style={styles.title} accessibilityRole="header">
                 {format.t('calls')}
             </Text>
+
+            <GroupBar groups={groups} activeId={activeGroupId} allLabel={format.t('allPeople')} onSelect={setActiveGroup} />
 
             {calls.length === 0 ? <Text style={styles.empty}>{format.t('noCalls')}</Text> : null}
 

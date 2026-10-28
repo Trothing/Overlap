@@ -1,9 +1,8 @@
-import { useMemo } from 'react'
 import { Tabs } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFormat } from '../../src/i18n/useFormat'
 import { Icon } from '../../src/ui/Icon'
-import { type Palette, fonts } from '../../src/ui/tokens'
+import { fonts } from '../../src/ui/tokens'
 import { useColors } from '../../src/ui/theme'
 
 const NAV_HEIGHT = 64
